@@ -1,0 +1,88 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mongodb"
+  url = env("DATABASE_URL")
+}
+
+enum DebtStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+enum NotificationType {
+  DUE_TODAY
+  OVERDUE_DAILY
+}
+
+model User {
+  id                      String @id @default(auto()) @map("_id") @db.ObjectId
+  name                    String
+  email                   String @unique
+  reminderTime            String @default("9:00")
+  timezone                String @default("Asia/Manila")
+  createdAt               DateTime @default(now())
+
+  debtsAsDebtor           Debt[] @relation("Debtor")
+  debtsAsCreditor         Debt[] @relation("Creditor")
+}
+
+model Debt {
+  id                      String @id @default(auto()) @map("_id") @db.ObjectId
+  title                   String
+  description             String?
+  amount                  Float
+  interestRate            Float?
+  startDate               DateTime
+  dueDate                 DateTime
+  status                  DebtStatus @default(UNPAID)
+  notificationsEnabled    Boolean @default(true)
+  createdAt               DateTime @default(now())
+
+  debtorId                String @db.ObjectId
+  creditorId              String @db.ObjectId
+
+  debtor                  User @relation("Debtor", fields: [debtorId], references: [id])
+  creditor                User @relation("Creditor", fields: [creditorId], references: [id])
+
+  payments                Payment[]
+  notifications           Notification[]
+
+  @@index([debtorId])
+  @@index([creditorId])
+}
+
+model Payment {
+  id                      String @id @default(auto()) @map("_id") @db.ObjectId
+  amount                  Float
+  proofUrl                String?
+  paidAt                  DateTime
+  createdAt               DateTime @default(now())
+
+  debtId                  String @db.ObjectId
+  debt                    Debt @relation(fields: [debtId], references: [id])
+
+  @@index([debtId])
+}
+
+model Notification {
+  id                      String @id @default(auto()) @map("_id") @db.ObjectId
+  type                    NotificationType
+  triggeredAt             DateTime
+  readAt                  DateTime?
+
+  debtId                  String @db.ObjectId
+  debt                    Debt   @relation(fields: [debtId], references: [id])
+
+  @@index([debtId, triggeredAt])
+}
