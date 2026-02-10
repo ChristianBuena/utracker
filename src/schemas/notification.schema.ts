@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { NotificationType } from '../generated/prisma/enums';
+import { NotificationType } from '@/generated/prisma/enums';
 
 export const notificationSchema = z.object({
     id: z.string().optional(),
