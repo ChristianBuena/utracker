@@ -27,6 +27,11 @@ enum PaymentMethod {
   OTHER
 }
 
+enum IncreaseInstance {
+  HALF_MONTH
+  MONTHLY
+}
+
 enum NotificationType {
   DUE_TODAY
   OVERDUE_DAILY
@@ -51,6 +56,7 @@ model Debt {
   amount                  Float
   interestRate            Float?
   startDate               DateTime
+  rateIncreaseInstance    IncreaseInstance  @default(MONTHLY)
   dueDate                 DateTime
   status                  DebtStatus @default(UNPAID)
   notificationsEnabled    Boolean @default(true)

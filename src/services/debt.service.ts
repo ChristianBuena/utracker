@@ -1,9 +1,18 @@
 import { prisma } from '@/lib/prisma'
+import { Prisma } from "@/generated/prisma/client"
+import { DebtInput } from "@/schemas/debt.schema"
 import { DebtModel, PaymentModel } from "@/generated/prisma/models"
 import { DebtStatus } from "@/generated/prisma/enums"
 
 
+
+
 // Should create createDebt for adding dept logic
+//the function should:
+    //create title
+    //create description
+    //add the amount of debt
+    //add the rate increase date then update or update the rate everytime 1 month (default 1 month)
 
 // type guide for cannonical shape that every consumer (api or frontend) can rely on
 export type DebtSummary = {
@@ -15,6 +24,59 @@ export type DebtSummary = {
     derivedStatus: DebtStatus;
 };
 
+export function createDebt(input: DebtInput): Promise<DebtSummary> {
+    return prisma.$transaction(async (tx:Prisma.TransactionClient) => {
+        const [debtor, creditor] = await Promise.all([
+            tx.user.findUnique({ where: { id: input.debtorId}}),
+            tx.user.findUnique({ where: { id: input.creditorId}})
+        ])
+        if (!debtor) throw new Error('Debtor not found')
+        if (!creditor) throw new Error('Creditor not found')
+
+        //create debt
+        const debt = await tx.debt.create({
+            data: {
+                title: input.title,
+                description: input.description,
+                amount: input.amount,
+                interestRate: input.interestRate,
+                rateIncreaseInstance: input.rateIncreaseInstance,
+                startDate: input.startDate,
+                dueDate: input.dueDate,
+                debtorId: input.debtorId,
+                creditorId: input.creditorId,
+                notificationsEnabled: input.notificationsEnabled ?? true,
+                status: input.status ?? DebtStatus.UNPAID
+            }
+        })
+
+        //fetch payment(should be emtpy initially)
+        const payments: PaymentModel[] = await tx.payment.findMany({
+            where: { debtId: debt.id },
+            orderBy: { paidAt: 'asc'}
+        })
+
+        const { totalPaid, remainingBalance, derivedStatus, isOverdue } =
+            computeDebtState(debt as DebtModel, payments)
+
+        let updatedDebt = debt
+        if (derivedStatus !== debt.status) {
+            updatedDebt = await tx.debt.update ({
+                where: { id: debt.id },
+                data: { status: derivedStatus }
+            })
+        }
+
+        return {
+            debt: { ...updatedDebt, status: derivedStatus },
+            payments,
+            totalPaid,
+            remainingBalance,
+            derivedStatus,
+            isOverdue
+        }
+    })
+}
 // helper function for computation of key field
 export function computeDebtState(
   debt: DebtModel,
@@ -25,17 +87,21 @@ export function computeDebtState(
   derivedStatus: DebtStatus;
   isOverdue: boolean;
 } {
-    const totalPaid = payments.reduce((sum:number, p: PaymentModel) => sum + p.amount, 0);
-    
-    const remainingBalance = Math.max(debt.amount - totalPaid, 0);
+    const totalPaid = payments.reduce(
+        (sum: number, p: PaymentModel) => sum + Number(p.amount),
+        0
+    );
+
+    const debtAmount = Number(debt.amount);
+    const remainingBalance = Math.max(debtAmount - totalPaid, 0);
 
     let derivedStatus: DebtStatus;
-    if(totalPaid === 0) {
+    if (totalPaid === 0) {
         derivedStatus = DebtStatus.UNPAID;
-    } else if (totalPaid < debt.amount) {
+    } else if (totalPaid < debtAmount) {
         derivedStatus = DebtStatus.PARTIALLY_PAID;
     } else {
-        derivedStatus = DebtStatus.PAID
+        derivedStatus = DebtStatus.PAID;
     }
 
     const isOverdue = new Date() > new Date(debt.dueDate) && derivedStatus !== DebtStatus.PAID;
@@ -85,34 +151,21 @@ export async function listDebtsWithSummary(): Promise<DebtSummary[]> {
     });
 
     return debts.map((debt) => {
+        const { payments, ...debtData } = debt;
         const { totalPaid, remainingBalance, derivedStatus, isOverdue } = computeDebtState(
-        debt,
-        debt.payments,
-    );
+            debtData as DebtModel,
+            payments,
+        );
 
-     return {
-      debt: {
-        id: debt.id,
-        title: debt.title,
-        description: debt.description,
-        amount: debt.amount,
-        interestRate: debt.interestRate,
-        startDate: debt.startDate,
-        dueDate: debt.dueDate,
-        status: derivedStatus,
-        notificationsEnabled: debt.notificationsEnabled,
-        createdAt: debt.createdAt,
-        debtorId: debt.debtorId,
-        creditorId: debt.creditorId,
-      },
-      payments: debt.payments,
-      totalPaid,
-      remainingBalance,
-      derivedStatus,
-      isOverdue,
-    };
-
-    })
+        return {
+            debt: { ...(debtData as DebtModel), status: derivedStatus },
+            payments,
+            totalPaid,
+            remainingBalance,
+            derivedStatus,
+            isOverdue,
+        };
+    });
 }
 
 // for sync DB status with computed status
