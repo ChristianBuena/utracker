@@ -2,15 +2,21 @@ import { z } from 'zod';
 import { DebtStatus } from '../generated/prisma/enums';
 import { IncreaseInstance } from '../generated/prisma/enums';
 
-export const deptSchema = z.object({
+export const debtSchema = z.object({
     id: z.string().optional(),
     title: z.string().min(1,"Title is required" ),
     description: z.string().optional(),
     amount: z.number().positive("Amount should be positive"),
     interestRate: z.number().positive("Interest should be positive").optional(),
     rateIncreaseInstance: z.enum(IncreaseInstance),
-    startDate: z.date(),
-    dueDate: z.date(),
+    startDate: z.preprocess(
+        (val) => (typeof val === "string" || val instanceof Date ? new Date(val) : val),
+        z.date()
+    ),
+    dueDate: z.preprocess(
+        (val) => (typeof val === "string" || val instanceof Date ? new Date(val) : val),
+        z.date()
+    ),
     status: z.enum(DebtStatus).default(DebtStatus.UNPAID), // ensures types matches prisma enum
     notificationsEnabled: z.boolean().default(true),   
     debtorId: z.string(),
@@ -18,4 +24,4 @@ export const deptSchema = z.object({
     createdAt: z.date().optional(),
 });
 
-export type DebtInput = z.infer<typeof deptSchema>
+export type DebtInput = z.infer<typeof debtSchema>

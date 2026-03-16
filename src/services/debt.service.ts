@@ -1,8 +1,8 @@
-import { prisma } from '@/lib/prisma'
-import { Prisma } from "@/generated/prisma/client"
-import { DebtInput } from "@/schemas/debt.schema"
-import { DebtModel, PaymentModel } from "@/generated/prisma/models"
-import { DebtStatus } from "@/generated/prisma/enums"
+import { DebtStatus } from '@/generated/prisma/enums';
+import type { DebtModel, PaymentModel } from '@/generated/prisma/models';
+import type { DebtInput } from '@/schemas/debt.schema';
+import type { Prisma } from '@/generated/prisma/client';
+import { prisma } from '@/lib/prisma';
 
 
 
